@@ -91,9 +91,7 @@ fn fft(input: [f64; SAMPLE_LEN], wn: [(f64, f64); SAMPLE_LEN / 2]) -> [(f64, f64
     }
     
     // convert output to polar coordinates
-    let output: [(f64, f64); SAMPLE_LEN] = cart_to_polar(y_real, y_imag);
-           
-    output
+    cart_to_polar(y_real, y_imag)
 }
 
 // convert list of complex numbers from cartesian to polar coordinates
@@ -105,21 +103,17 @@ fn cart_to_polar(input_real: [f64; SAMPLE_LEN], input_imag: [f64; SAMPLE_LEN]) -
         polar_list[n].1 = complex_phase(input_real[n], input_imag[n]);
     }
 
-    return polar_list;   
+    polar_list   
 }
 
 // calculate magnitude of complex number
 fn complex_mag(a: f64, b: f64) -> f64 {
-    let mag: f64 = (a.powf(2.0) + b.powf(2.0)).sqrt();
-
-    return mag;  
+    (a.powf(2.0) + b.powf(2.0)).sqrt()
 }
 
 // calculate phase of complex number
 fn complex_phase(a: f64, b: f64) -> f64 {
-    let phase: f64 = b.atan2(a);   
-
-    return phase;
+    b.atan2(a)   
 }
 
 // reverse bits of binary number
@@ -134,7 +128,7 @@ fn reverse_bits(mut input: i64, num_bits: i64) -> i64 {
         input >>= 1;
     }
     
-    return output;
+    output
 }
 
 // reorder list so bits of binary index are reversed
@@ -149,7 +143,7 @@ fn reverse_bin_index(input: [f64; SAMPLE_LEN], num_bits: i64) -> [f64; SAMPLE_LE
         output[index] = input[rev_index];
     }
     
-    return output;
+    output
 }
 
 // check that log2(sample length) is an integer
@@ -157,11 +151,11 @@ fn check_sample_len() -> bool {
     let y: f64 = SAMPLE_LEN_F.log2();
 
     if y % 1.0 < 1e-10 {
-        return true;
+        true
     }
     else {
         println!("error: log2(sample length) not an integer");
-        return false;
+        false
     }
 }
 
@@ -181,7 +175,7 @@ fn generate_sinusoid(harmonic: i64, mag: f64, phase: f64) -> [f64; SAMPLE_LEN] {
         output[index] = mag * phi.cos();        
     }   
     
-    return output;
+    output
 }
 
 // generate a test signal for FFT input
@@ -194,7 +188,7 @@ fn test_signal() -> [f64; SAMPLE_LEN] {
         output[n] = sig1[n] + sig2[n];
     }
     
-    return output;
+    output
 }
 
 // inverse DFT for testing FFT output
@@ -217,7 +211,7 @@ fn inv_dft(input: [(f64, f64); SAMPLE_LEN]) -> [f64; SAMPLE_LEN] {
         output[n_index] /= SAMPLE_LEN_F;        
     }   
     
-    return output;
+    output
 }
 
 // DFT for testing inverse DFT
@@ -240,9 +234,7 @@ fn dft(input: [f64; SAMPLE_LEN]) -> [(f64, f64); SAMPLE_LEN] {
         }             
     }   
     
-    let output: [(f64, f64); SAMPLE_LEN] = cart_to_polar(y_real, y_imag);
-    
-    return output;
+    cart_to_polar(y_real, y_imag)
 }
 
 // public function for executing FFT lib. input not parameter yet.
