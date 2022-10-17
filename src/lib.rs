@@ -1,18 +1,16 @@
 use std::f64::consts::PI;
 
-pub const SAMPLE_LEN: usize = 16;
-pub const SAMPLE_LEN_F: f64 = SAMPLE_LEN as f64;
-pub const W: f64 = 2.0 * PI / SAMPLE_LEN_F;
-
 // generate complex phasor for FFT computation
-fn generate_wn() -> [(f64, f64); SAMPLE_LEN / 2] {
-    let mut wn: [(f64, f64); SAMPLE_LEN / 2] = [(0.0, 0.0); SAMPLE_LEN / 2];
+pub fn generate_wn(sample_len: usize) -> Vec<(f64, f64)> {
+    let sample_len_f: f64 = sample_len as f64;
+    let w: f64 = 2.0 * PI / sample_len_f;
+    let mut wn: Vec<(f64, f64)> = vec![(0.0, 0.0); sample_len / 2];
     let mut n: f64;
     let mut phi: f64;
     
-    for index in 0..(SAMPLE_LEN / 2) {
+    for index in 0..(sample_len / 2) {
         n = index as f64;        
-        phi = W * n;
+        phi = w * n;
         wn[index].0 = phi.cos();        
         wn[index].1 = -phi.sin();                    
     }   
@@ -30,27 +28,27 @@ fn generate_wn() -> [(f64, f64); SAMPLE_LEN / 2] {
 // if log2(SAMPLE_LEN) is an integer then DFTs G(k) and H(k) can be further split into DFTs of half size.
 // this process repeats until the number of DFTs equals the sample length, each with 1 input/ouput.
 // for a 1 input DFT, Y(0) = x(0). therefore, no DFTs need to be computed, only reconstructed with Wn.
-fn fft(input: [f64; SAMPLE_LEN], wn: [(f64, f64); SAMPLE_LEN / 2]) -> [(f64, f64); SAMPLE_LEN] { 
+pub fn fft(input: Vec<f64>, wn: Vec<(f64, f64)>, sample_len: usize) -> Vec<(f64, f64)> { 
+    let sample_len_int = sample_len as i64;
+    let sample_len_f: f64 = sample_len as f64;
+    let num_bits = sample_len_f.log2().round() as i64;
     let mut g_index: usize;
     let mut h_index: usize;
     let mut wn_index: usize;
-    let sample_len_int = SAMPLE_LEN as i64;
     let mut dft_size: i64 = 2;
     let mut dft_num: i64;
-    let mut x_real = input;
-    let mut x_imag: [f64; SAMPLE_LEN] = [0.0; SAMPLE_LEN];
-    let mut y_real: [f64; SAMPLE_LEN] = [0.0; SAMPLE_LEN];
-    let mut y_imag: [f64; SAMPLE_LEN] = [0.0; SAMPLE_LEN];
+    let mut x_real = reverse_bin_index(input, num_bits, sample_len);
+    let mut x_imag: Vec<f64> = vec![0.0; sample_len];
+    let mut y_real: Vec<f64> = vec![0.0; sample_len];
+    let mut y_imag: Vec<f64> = vec![0.0; sample_len];
     let mut h_wn_real: f64;
     let mut h_wn_imag: f64;
     
     while dft_size <= sample_len_int {
         dft_num = sample_len_int / dft_size;
-        //println!("\nDFT size: {}", dft_size);
 
         // iterate through DFTs
         for dft_id in 0..dft_num {
-            //println!("\nDFT id: {}", dft_id);
 
             // iterate through DFT indices
             for k in 0..(dft_size / 2) {
@@ -68,35 +66,26 @@ fn fft(input: [f64; SAMPLE_LEN], wn: [(f64, f64); SAMPLE_LEN / 2]) -> [(f64, f64
                 y_real[h_index] = x_real[g_index] - h_wn_real;  // due to symmetry of complex phasor Wn(k) and periodicity of G(k) and H(k)
                 y_imag[h_index] = x_imag[g_index] - h_wn_imag;  // when k > dft_size / 2,
                                                                 // Y(k) = G(k - dft_size / 2) + H(k - dft_size / 2) * -Wn(k - dft_size / 2)                
-                //println!("\nDFT index: {}", k);
-                //println!("g_index: {}", g_index);
-                //println!("h_index: {}", h_index);
-                //println!("wn_index: {}", wn_index);
-                //println!("\nx_real[h_index]: {}", x_real[h_index]);
-                //println!("x_imag[h_index]: {}", x_imag[h_index]);
-                //println!("wn[wn_index]: {} {}", wn[wn_index].0, wn[wn_index].1);
-                //println!("\ny_real: {:?}", y_real);
-                //println!("\ny_imag: {:?}", y_imag);
             }
         }
         
         // double size of DFT and set input to output values for next iteration
         dft_size *= 2;
-        for n in 0..SAMPLE_LEN {
+        for n in 0..sample_len {
             x_real[n] = y_real[n];
             x_imag[n] = y_imag[n];
         }
     }
     
     // convert output to polar coordinates
-    cart_to_polar(y_real, y_imag)
+    cart_to_polar(y_real, y_imag, sample_len)
 }
 
 // convert list of complex numbers from cartesian to polar coordinates
-fn cart_to_polar(input_real: [f64; SAMPLE_LEN], input_imag: [f64; SAMPLE_LEN]) -> [(f64, f64); SAMPLE_LEN] {
-    let mut polar_list: [(f64, f64); SAMPLE_LEN] = [(0.0, 0.0); SAMPLE_LEN];
+fn cart_to_polar(input_real: Vec<f64>, input_imag: Vec<f64>, sample_len: usize) -> Vec<(f64, f64)> {
+    let mut polar_list: Vec<(f64, f64)> = vec![(0.0, 0.0); sample_len];
     
-    for n in 0..SAMPLE_LEN {
+    for n in 0..sample_len {
         polar_list[n].0 = complex_mag(input_real[n], input_imag[n]);
         polar_list[n].1 = complex_phase(input_real[n], input_imag[n]);
     }
@@ -130,12 +119,12 @@ fn reverse_bits(mut input: i64, num_bits: i64) -> i64 {
 }
 
 // reorder list so bits of binary index are reversed
-fn reverse_bin_index(input: [f64; SAMPLE_LEN], num_bits: i64) -> [f64; SAMPLE_LEN] {
-    let mut output: [f64; SAMPLE_LEN] = [0.0; SAMPLE_LEN];
+fn reverse_bin_index(input: Vec<f64>, num_bits: i64, sample_len: usize) -> Vec<f64> {
+    let mut output: Vec<f64> = vec![0.0; sample_len];
     let mut n: i64;
     let mut rev_index: usize;
         
-    for index in 0..SAMPLE_LEN {
+    for index in 0..sample_len {
         n = index as i64;
         rev_index = reverse_bits(n, num_bits) as usize;
         output[index] = input[rev_index];
@@ -145,8 +134,8 @@ fn reverse_bin_index(input: [f64; SAMPLE_LEN], num_bits: i64) -> [f64; SAMPLE_LE
 }
 
 // check that log2(sample length) is an integer
-fn check_sample_len() -> bool {
-    let y: f64 = SAMPLE_LEN_F.log2();
+fn check_sample_len(sample_len: f64) -> bool {
+    let y: f64 = sample_len.log2();
 
     if y % 1.0 < 1e-10 {
         true
@@ -157,20 +146,6 @@ fn check_sample_len() -> bool {
     }
 }
 
-// public function for executing FFT
-pub fn execute_fft(mut input: [f64; SAMPLE_LEN]) -> [(f64, f64); SAMPLE_LEN] {
-    if check_sample_len() {
-        let num_bits = SAMPLE_LEN_F.log2() as i64;
-        let wn: [(f64, f64); SAMPLE_LEN / 2] = generate_wn();   
-        input = reverse_bin_index(input, num_bits);
-
-        fft(input, wn)
-    }
-    else {
-        [(0.0, 0.0); SAMPLE_LEN]
-    }   
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -178,15 +153,17 @@ mod tests {
     
     // generate sinusoid with harmonic of sample period for creating test signals
     // fundamental frequency is harmonic = 1
-    fn generate_sinusoid(harmonic: i64, mag: f64, phase: f64) -> [f64; SAMPLE_LEN] {
-        let harmonic_f: f64 = harmonic as f64;
-        let mut output: [f64; SAMPLE_LEN] = [0.0; SAMPLE_LEN];
+    fn generate_sinusoid(harmonic: i64, mag: f64, phase: f64, sample_len: usize) -> Vec<f64> {
+        let sample_len_f = sample_len as f64;
+        let w: f64 = 2.0 * PI / sample_len_f;
+        let harmonic_f = harmonic as f64;
+        let mut output: Vec<f64> = vec![0.0; sample_len];
         let mut n: f64;
         let mut phi: f64;
     
-        for index in 0..SAMPLE_LEN {
+        for index in 0..sample_len {
             n = index as f64;        
-            phi = W * harmonic_f * n + phase;
+            phi = w * harmonic_f * n + phase;
             output[index] = mag * phi.cos();        
         }   
     
@@ -194,12 +171,12 @@ mod tests {
     }
 
     // generate a test signal for FFT input
-    fn test_signal() -> [f64; SAMPLE_LEN] {
-        let sig1: [f64; SAMPLE_LEN] = generate_sinusoid(1, 1.0, 0.0);
-        let sig2: [f64; SAMPLE_LEN] = generate_sinusoid(2, 0.5, PI);
-        let mut output: [f64; SAMPLE_LEN] = [0.0; SAMPLE_LEN];
+    fn test_signal(sample_len: usize) -> Vec<f64> {
+        let sig1: Vec<f64> = generate_sinusoid(1, 1.0, 0.0, sample_len);
+        let sig2: Vec<f64> = generate_sinusoid(2, 0.5, PI, sample_len);
+        let mut output: Vec<f64> = vec![0.0; sample_len];
     
-        for n in 0..SAMPLE_LEN {
+        for n in 0..sample_len {
             output[n] = sig1[n] + sig2[n];
         }
     
@@ -207,136 +184,158 @@ mod tests {
     }
 
     // inverse DFT for testing FFT output
-    fn inv_dft(input: [(f64, f64); SAMPLE_LEN]) -> [f64; SAMPLE_LEN] {
-        let mut output: [f64; SAMPLE_LEN] = [0.0; SAMPLE_LEN];
+    fn inv_dft(input: Vec<(f64, f64)>, sample_len: usize) -> Vec<f64> {
+        let sample_len_f = sample_len as f64;
+        let w: f64 = 2.0 * PI / sample_len_f;
+        let mut output: Vec<f64> = vec![0.0; sample_len];
         let mut n: f64;
         let mut k: f64;
         let mut phi: f64;
     
-        for n_index in 0..SAMPLE_LEN {
+        for n_index in 0..sample_len {
             n = n_index as f64;        
         
-            for k_index in 0..SAMPLE_LEN {
+            for k_index in 0..sample_len {
                 k = k_index as f64;
 
-                phi = W * n * k + input[k_index].1;
+                phi = w * n * k + input[k_index].1;
                 output[n_index] += input[k_index].0 * phi.cos();
             }
               
-            output[n_index] /= SAMPLE_LEN_F;        
+            output[n_index] /= sample_len_f;        
         }   
     
         output
     }
 
     // DFT for testing inverse DFT
-    fn dft(input: [f64; SAMPLE_LEN]) -> [(f64, f64); SAMPLE_LEN] {
-        let mut y_real: [f64; SAMPLE_LEN] = [0.0; SAMPLE_LEN];
-        let mut y_imag: [f64; SAMPLE_LEN] = [0.0; SAMPLE_LEN];
+    fn dft(input: Vec<f64>, sample_len: usize) -> Vec<(f64, f64)> {
+        let sample_len_f = sample_len as f64;
+        let w: f64 = 2.0 * PI / sample_len_f;
+        let mut y_real: Vec<f64> = vec![0.0; sample_len];
+        let mut y_imag: Vec<f64> = vec![0.0; sample_len];
         let mut n: f64;
         let mut k: f64;
         let mut phi: f64;
     
-        for k_index in 0..SAMPLE_LEN {
+        for k_index in 0..sample_len {
             k = k_index as f64;        
         
-            for n_index in 0..SAMPLE_LEN {
+            for n_index in 0..sample_len {
                 n = n_index as f64;
 
-                phi = W * n * k;
+                phi = w * n * k;
                 y_real[k_index] += input[n_index] * phi.cos();
                 y_imag[k_index] += input[n_index] * -phi.sin();
             }             
         }   
     
-        cart_to_polar(y_real, y_imag)
+        cart_to_polar(y_real, y_imag, sample_len)
     }
 
-
+    // time FFT calculation time of increasingly large sample lengths
     #[test]
     fn speed_test(){
-        if check_sample_len() {
-            let num_bits = SAMPLE_LEN_F.log2() as i64;
-            let wn: [(f64, f64); SAMPLE_LEN / 2] = generate_wn();   
-            let mut input: [f64; SAMPLE_LEN] = test_signal();   
+        let mut num_bits: u32 = 1;
+        let mut sample_len: usize;
+        
+        while num_bits <= 16 {
+            sample_len = 2usize.pow(num_bits);
+            println!("\nsample length: {}", sample_len);
+            println!("number of bits: {}", num_bits);
 
+            let wn: Vec<(f64, f64)> = generate_wn(sample_len);   
+            let dft_input: Vec<f64> = test_signal(sample_len);   
+            let fft_input: Vec<f64> = dft_input.clone();
+        
             // compare time of FFT algorithm with DFT
-            let dft_timer = Instant::now();         
-            let _output_dft: [(f64, f64); SAMPLE_LEN] = dft(input);
-            println!("DFT Elapsed time: {:.2?}", dft_timer.elapsed());
+            //let dft_timer = Instant::now();         
+            //let _output_dft: Vec<(f64, f64)> = dft(dft_input, sample_len);
+            //println!("DFT Elapsed time: {:.2?}", dft_timer.elapsed());
 
             let fft_timer = Instant::now();         
-            input = reverse_bin_index(input, num_bits);
-            let _output: [(f64, f64); SAMPLE_LEN] = fft(input, wn);
+            let _output_fft: Vec<(f64, f64)> = fft(fft_input, wn, sample_len);
             println!("FFT Elapsed time: {:.2?}", fft_timer.elapsed());
+            
+            num_bits += 1;
         }
     }
 
+    // test FFT by recombining FFT co-efficients into original signal
     #[test]
     fn fft_test() {
         let mut e: f64;
-
-        if check_sample_len() {
-            let num_bits = SAMPLE_LEN_F.log2() as i64;
-            let wn: [(f64, f64); SAMPLE_LEN / 2] = generate_wn();   
-            let input: [f64; SAMPLE_LEN] = test_signal();         
-            let input_rev: [f64; SAMPLE_LEN] = reverse_bin_index(input, num_bits);
-            let output: [(f64, f64); SAMPLE_LEN] = fft(input_rev, wn);   
-            let recombination: [f64; SAMPLE_LEN] = inv_dft(output);
-
-            println!("\nWn: {:?}", wn);
-            println!("\ninput: {:?}", input);
-            println!("\ninput (re-ordered): {:?}", input_rev);
-            println!("\noutput: {:?}", output);   
-            println!("\nrecombination: {:?}", recombination);
-    
-            for n in 0..SAMPLE_LEN {
-                e = recombination[n] - input[n];
-                assert!(e < 1e-10);
-            }
-        }
-    }
-
-    #[test]
-    fn inv_dft_test() {  
-        let mut e: f64;
-        let input: [f64; SAMPLE_LEN] = test_signal();
-        let output: [(f64, f64); SAMPLE_LEN] = dft(input);    
-        let recombination: [f64; SAMPLE_LEN] = inv_dft(output); 
-
+        let sample_len: usize = 32;
+        let wn: Vec<(f64, f64)> = generate_wn(sample_len);   
+        println!("\nWn: {:?}", wn);
+        let input: Vec<f64> = test_signal(sample_len);         
+        let input_clone: Vec<f64> = input.clone();
         println!("\ninput: {:?}", input);
-        println!("\noutput: {:?}", output);
+        let output: Vec<(f64, f64)> = fft(input, wn, sample_len);   
+        println!("\noutput: {:?}", output);   
+        let recombination: Vec<f64> = inv_dft(output, sample_len);
         println!("\nrecombination: {:?}", recombination);
-    
-        for n in 0..SAMPLE_LEN {
-            e = recombination[n] - input[n];
+
+        for n in 0..sample_len {
+            e = recombination[n] - input_clone[n];
             assert!(e < 1e-10);
         }
     }
 
+    // test inverse DFT by performing DFT on a signal and recombining
+    #[test]
+    fn inv_dft_test() {  
+        let mut e: f64;
+        let sample_len: usize = 32;
+        let input: Vec<f64> = test_signal(sample_len);
+        let input_clone: Vec<f64> = input.clone();
+        println!("\ninput: {:?}", input);
+        let output: Vec<(f64, f64)> = dft(input, sample_len);    
+        println!("\noutput: {:?}", output);
+        let recombination: Vec<f64> = inv_dft(output, sample_len); 
+        println!("\nrecombination: {:?}", recombination);
+    
+        for n in 0..sample_len {
+            e = recombination[n] - input_clone[n];
+            assert!(e < 1e-10);
+        }
+    }
+
+    // tests bit reversal for all sample lengths up to 64-bit
     #[test]
     fn reverse_bits_test() {
         let mut input: i64;
         let mut output: i64;
         let mut input_bit: i64;
         let mut output_bit: i64;
-        let num_bits = SAMPLE_LEN_F.log2() as i64;
-    
-        println!("\nsample length: {}", SAMPLE_LEN);
-        println!("number of bits: {}", num_bits);
+        let mut sample_len: usize = 2;
+        let mut sample_len_f = sample_len as f64;
+        let mut num_bits = sample_len_f.log2().round() as i64;    
 
-        for index in 0..SAMPLE_LEN {
-            input = index as i64;
-            output = reverse_bits(input, num_bits);       
+        while num_bits <= 62 {
+            println!("\nsample length: {}", sample_len);
+            println!("number of bits: {}", num_bits);
 
-            println!("\ninput: {}", input);
-            println!("output: {}", output);   
+            input = 1;
+            
+            for index in 0..num_bits {
+                output = reverse_bits(input, num_bits);       
 
-            for bit in 0..num_bits {
-                input_bit = (input >> (num_bits - bit - 1)) & 1;
-                output_bit = (output >> bit) & 1;
-                assert_eq!(input_bit, output_bit);
-            }
-        }  
+                //println!("\ninput: {}", input);
+                //println!("output: {}", output);   
+
+                for bit in 0..num_bits {
+                    input_bit = (input >> (num_bits - bit - 1)) & 1;
+                    output_bit = (output >> bit) & 1;
+                    assert_eq!(input_bit, output_bit);
+                }
+                
+                input *= 2;
+            }  
+
+            sample_len *= 2;
+            sample_len_f = sample_len as f64;
+            num_bits = sample_len_f.log2().round() as i64;
+        }
     }
 }
