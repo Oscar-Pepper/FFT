@@ -158,13 +158,13 @@ fn check_sample_len() -> bool {
 }
 
 // public function for executing FFT
-pub fn execute_fft(input: [f64; SAMPLE_LEN]) -> [(f64, f64); SAMPLE_LEN] {
+pub fn execute_fft(mut input: [f64; SAMPLE_LEN]) -> [(f64, f64); SAMPLE_LEN] {
     if check_sample_len() {
         let num_bits = SAMPLE_LEN_F.log2() as i64;
         let wn: [(f64, f64); SAMPLE_LEN / 2] = generate_wn();   
-        let x: [f64; SAMPLE_LEN] = reverse_bin_index(input, num_bits);
+        input = reverse_bin_index(input, num_bits);
 
-        fft(x, wn)
+        fft(input, wn)
     }
     else {
         [(0.0, 0.0); SAMPLE_LEN]
